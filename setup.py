@@ -4,7 +4,13 @@ with open("README.md") as readme:
     long_description = readme.read()
 
 requirements = [
-
+    "matplotlib>=3.5.2",
+    "numpy>=1.23.1",
+    "pandas>=1.4.3",
+    "ReliefF>=0.1.2",
+    "scikit-learn>=1.1.1",
+    "seaborn>=0.11.2",
+    "sklearn>=0.0"
 ]
 
 setup(
