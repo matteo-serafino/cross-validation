@@ -1,230 +1,144 @@
-import umap
 import pandas as pd
 import numpy as np
-from sklearn.manifold import TSNE
-from sklearn.manifold import MDS
-from sklearn.manifold import Isomap
-from sklearn.decomposition import PCA
-from sklearn.decomposition import FactorAnalysis
-from sklearn.decomposition import TruncatedSVD
-from sklearn.decomposition import KernelPCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import LeaveOneOut
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import confusion_matrix, f1_score, matthews_corrcoef, balanced_accuracy_score
+from src.performance.performance import PerformanceMetrics
 
-from dimensionality_reduction.services import plot_service as ps
+# Put constants here
 
-TARGET_COLUMN = "target"
+class CrossValidation():
 
-class DimensionalityReduction():
+    def __init__(self, X, y, ):
+        self.X = X
+        self.y = y
+        return
 
-    def __init__(self):
-        pass
-
-    def tsne(self, X, y, n_components: int = 3, title: str = "t-SNE"):
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
+    def kfold(self, model, k: int = 10, cv_name:str ='test', verbose: bool = False):
         
-        columns = self.__columns_names(n_components)
+        k_fold = StratifiedKFold(n_splits = k)
+        y_pred = pd.Series('NC', index = range(0, self.X.shape[0]))
+        i_fold = 1
 
-        df = pd.DataFrame(TSNE(n_components=n_components, random_state=42).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
+        print("k-fold cross-validation running...")
 
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
+        for train_index, test_index in k_fold.split(self.X, self.y):
 
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
+            # Defining training set and test set for the i-th fold
+            X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
+            y_train, y_test = self.y[train_index], self.y[test_index]
 
-        ps.matrix_plot(df=df)
+            # Model training
+            model.fit(X_train.values, y_train.values)
+            y_pred[test_index] = model.predict(X_test.values)
 
-        return df
-
-    def UMAP(self, X, y, n_components: int = 3, title: str = "UMAP"):
+            if(verbose):
+                # Evaluationg performance of the i-th fold
+                print("k = {i_fold}, balance acc = {1}, f1-score = {2}, MCC = {3}"
+                    .format(i_fold, 
+                            np.round(balanced_accuracy_score(y_test, y_pred[test_index]), decimals=2),
+                            np.round(f1_score(y_test, y_pred[test_index], average= 'micro'), decimals=2),
+                            np.round(matthews_corrcoef(y_test, y_pred[test_index]), decimals=2)))
+            i_fold = i_fold + 1
         
-        if n_components == 0:
-            return None
+        # Overall performances
+        balanced_accuracy = np.round(balanced_accuracy_score(self.y, y_pred), decimals=2)
+        f1score = np.round(f1_score(self.y, y_pred, average= 'micro'), decimals=2)
+        mcc = np.round(matthews_corrcoef(self.y, y_pred), decimals=2)
+        print("OVERALL, balanced acc = {0}, f1-score = {1}, MCC = {2}"
+                .format(balanced_accuracy, f1score, mcc))
+        conf_mat = confusion_matrix(self.y, y_pred)
+        print("{0}-fold cross-validation classification report:".format(k))
 
-        X_scaled = StandardScaler().fit(X).transform(X)
+        cv_perf = PerformanceMetrics(self.y, y_pred).classification_scores()
 
-        columns = self.__columns_names(n_components)
+        df_temp = pd.DataFrame(pd.DataFrame(pd.Series([cv_name, balanced_accuracy, f1score, mcc])))
+        df_cv_perf = df_temp.T
+        df_cv_perf.columns = ['cv_type', 'balanced_accuracy', 'f1_score', 'mcc']
 
-        df = pd.DataFrame(umap.UMAP(random_state=42, n_components=n_components).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
+        return conf_mat, df_cv_perf
 
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def lda(self, X, y, title: str = "LDA"):
-
-        n_components = len(np.unique(y)) - 1
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df = pd.DataFrame(LinearDiscriminantAnalysis(n_components=n_components).fit_transform(X_scaled, y), columns=columns)
-        df[TARGET_COLUMN] = y
-
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def pca(self, X, y, n_components: int = 3, title: str = "PCA"):
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df= pd.DataFrame(PCA(n_components=n_components).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
-
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def factor_analysis(self, X, y, n_components: int = 3, title: str = "Factor Analysis"):
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df = pd.DataFrame(FactorAnalysis(n_components=n_components, rotation="varimax", random_state=42).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
-
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def truncated_svd(self, X, y, n_components: int = 3, title: str = "Truncated SVD"):
-
-        if n_components == 0:
-            return None
+    def leave_one_out(self, model, cv_name: str ='test', verbose: bool = False):
         
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df = pd.DataFrame(TruncatedSVD(n_components=n_components, random_state=0).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
+        loo = LeaveOneOut()
         
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
+        y_pred = pd.Series('NC', index = range(0, self.X.shape[0]))
 
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
+        cnt = 1
+        print("Leave One Out cross-validation...")
+        for train_index, test_index in loo.split(self.X):
 
-        ps.matrix_plot(df=df)
+            # Defining training set and test set for the i-th fold
+            X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
+            y_train, y_test = self.y[train_index], self.y[test_index]
 
-        return df
-
-    def kernel_pca(self, X, y, n_components: int = 3, title: str = "Kernel PCA"):
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df = pd.DataFrame(KernelPCA(n_components=n_components, kernel='rbf', gamma=15, random_state=42).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
-
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def multidim_scaling(self, X, y, n_components: int = 3, title: str = "MDS"):
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df = pd.DataFrame(MDS(n_components=n_components, metric=True, random_state=42).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
-
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def isomap(self, X, y, n_components: int = 3, title: str = "Isomap"):
-
-        if n_components == 0:
-            return None
-
-        X_scaled = StandardScaler().fit(X).transform(X)
-
-        columns = self.__columns_names(n_components)
-
-        df = pd.DataFrame(Isomap(n_neighbors=10, n_components=n_components).fit_transform(X_scaled), columns=columns)
-        df[TARGET_COLUMN] = y
-
-        if n_components == 3:
-            ps.plot_3d(df=df, title=title)
-
-        if n_components == 2:
-            ps.plot_2d(df=df, title=title)
-
-        ps.matrix_plot(df=df)
-
-        return df
-
-    def __columns_names(self, n_components: int) -> list[str]:
-
-        columns = []
-
-        for i in range(n_components):
-            columns.append(f"c_{i + 1}")
+            # Model training
+            model.fit(X_train, y_train)
+            y_pred[test_index] = model.predict(X_test)
+            if(verbose):
+                # Evaluationg performance of the i-th fold
+                print("i = {0}, f1-score = {1}".format(cnt, np.round(f1_score(y_test, y_pred, average= 'micro'), decimals = 2)))
+            cnt = cnt + 1
         
-        return columns
+        # Overall performances
+        conf_mat = confusion_matrix(self.y, y_pred)
+        balanced_accuracy = np.round(balanced_accuracy_score(self.y, y_pred), decimals=2)
+        f1score = np.round(f1_score(self.y, y_pred, average= 'micro'), decimals=2)
+        mcc = np.round(matthews_corrcoef(self.y, y_pred), decimals=2)
+        print("OVERALL, balanced acc = {0}, f1-score = {1}, MCC = {2}"
+                .format(balanced_accuracy, f1score, mcc))
+        conf_mat = confusion_matrix(self.y, y_pred)
+
+        print("Leave One Out cross-validation classification report:")
+        
+        cv_perf = PerformanceMetrics(self.y, y_pred).classification_scores()
+
+        df_temp = pd.DataFrame(pd.DataFrame(pd.Series([cv_name, balanced_accuracy, f1score, mcc])))
+        df_cv_perf = df_temp.T
+        df_cv_perf.columns = ['cv_type', 'balanced_accuracy', 'f1_score', 'mcc']
+
+        return conf_mat, df_cv_perf
+
+    def leave_one_subject_out(self, model, subject_ids: list, cv_name: str ='test', verbose: bool = False):
+
+        y_pred = pd.Series('NC', index = range(0, self.X.shape[0]))
+
+        subject_id = np.unique(subject_ids)
+
+        print("Leave One Subject Out cross-validation...")
+
+        for s in subject_id:
+
+            test_index = subject_ids == s
+            train_index = not(test_index)
+
+            # Defining training set and test set for the i-th fold
+            X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
+            y_train, y_test = self.y[train_index], self.y[test_index]
+
+            # Model training
+            model.fit(X_train, y_train)
+            y_pred[test_index] = model.predict(X_test)
+            if(verbose):
+                # Evaluationg performance of the i-th fold
+                print("i = {0}, f1-score = {1}".format(cnt, np.round(f1_score(y_test, y_pred, average= 'micro'), decimals = 2)))
+            cnt = cnt + 1
+
+        # Overall performances
+        conf_mat = confusion_matrix(self.y, y_pred)
+        balanced_accuracy = np.round(balanced_accuracy_score(self.y, y_pred), decimals=2)
+        f1score = np.round(f1_score(self.y, y_pred, average= 'micro'), decimals=2)
+        mcc = np.round(matthews_corrcoef(self.y, y_pred), decimals=2)
+        print("OVERALL, balanced acc = {0}, f1-score = {1}, MCC = {2}"
+                .format(balanced_accuracy, f1score, mcc))
+        conf_mat = confusion_matrix(self.y, y_pred)
+
+        print("Leave One Subject Out cross-validation classification report:")
+        
+        cv_perf = PerformanceMetrics(self.y, y_pred).classification_scores()
+
+        df_temp = pd.DataFrame(pd.DataFrame(pd.Series([cv_name, balanced_accuracy, f1score, mcc])))
+        df_cv_perf = df_temp.T
+        df_cv_perf.columns = ['cv_type', 'balanced_accuracy', 'f1_score', 'mcc']
+
+        return conf_mat, df_cv_perf 
