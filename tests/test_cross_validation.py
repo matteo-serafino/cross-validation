@@ -1,10 +1,10 @@
 import unittest
+import pandas as pd
 from sklearn import datasets
-from dimensionality_reduction.dimensionality_reduction import DimensionalityReduction
+from sklearn.ensemble import RandomForestClassifier
+import src.cross_validation.cross_validation as cv 
 
-dr = DimensionalityReduction()
-
-class TestDimensionalityReduction(unittest.TestCase):
+class TestCrossValidation(unittest.TestCase):
 
     def setUp(self):
 
@@ -13,56 +13,18 @@ class TestDimensionalityReduction(unittest.TestCase):
         self.X = iris_dataset.data[:, :3]
         self.y = iris_dataset.target
 
-    def test_tsne(self):
+    def test_kfold(self):
+        
+        clf = RandomForestClassifier()
+        X_df = pd.DataFrame(self.X)
+        [cm, perf] = cv.kfold(clf, X_df, self.y, verbose=True)
 
-        df = dr.tsne(self.X, self.y, 2)
+        assert True
 
-        assert df.shape == (150, 3)
+    def test_loo(self):
+        
+        clf = RandomForestClassifier()
+        X_df = pd.DataFrame(self.X)
+        [cm, perf] = cv.leave_one_out(clf, X_df, self.y, verbose=True)
 
-    def test_umap(self):
-
-        df = dr.UMAP(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
-
-    def test_lda(self):
-
-        df = dr.lda(self.X, self.y)
-
-        assert df.shape == (150, 3)   
-
-    def test_pca(self):
-
-        df = dr.pca(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
-
-    def test_factor_analysis(self):
-
-        df = dr.factor_analysis(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
-
-    def test_truncated_svd(self):
-
-        df = dr.truncated_svd(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
-
-    def test_kernal_pca(self):
-
-        df = dr.kernel_pca(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
-
-    def test_multidim_scaling(self):
-
-        df = dr.multidim_scaling(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
-
-    def test_isomap(self):
-
-        df = dr.isomap(self.X, self.y, 2)
-
-        assert df.shape == (150, 3)
+        assert True

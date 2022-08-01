@@ -2,143 +2,164 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import LeaveOneOut
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import confusion_matrix, f1_score, matthews_corrcoef, balanced_accuracy_score
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import f1_score
+from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import balanced_accuracy_score
 from src.performance.performance import PerformanceMetrics
 
-# Put constants here
+def kfold(model, X: pd.DataFrame, y: list, k: int = 10, cv_name: str ='k-fold', verbose: bool = False):
+    
+    k_fold = StratifiedKFold(n_splits = k)
+    y_pred = np.array(X.shape[0] * [y[0]])
+    ith_fold = 1
 
-class CrossValidation():
+    kfold_perf = []
 
-    def __init__(self, X, y, ):
-        self.X = X
-        self.y = y
-        return
+    for train_index, test_index in k_fold.split(X, y):
 
-    def kfold(self, model, k: int = 10, cv_name:str ='test', verbose: bool = False):
+        # Defining training set and test set for the i-th fold
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        # Model training
+        model.fit(X_train.values, y_train)
+        y_pred[test_index] = model.predict(X_test.values)
+
+        # i-th fold performance
+        ith_cv = {
+            'name': cv_name,
+            'fold': ith_fold,
+            'balanced_accuracy': np.round(balanced_accuracy_score(y_test, y_pred[test_index]), decimals=2),
+            'f1_score': np.round(f1_score(y_test, y_pred[test_index], average= 'micro'), decimals=2),
+            'mcc': np.round(matthews_corrcoef(y_test, y_pred[test_index]), decimals=2)
+        }
+
+        kfold_perf.append(ith_cv)
+ 
+        if (verbose):
+            print(f"k = {ith_fold}\nbalance acc = {ith_cv['balanced_accuracy']}, f1-score = {ith_cv['f1_score']}, MCC = {ith_cv['mcc']}")
         
-        k_fold = StratifiedKFold(n_splits = k)
-        y_pred = pd.Series('NC', index = range(0, self.X.shape[0]))
-        i_fold = 1
+        ith_fold += 1
+    
+    # Overall performances
+    overall_cv = {
+        'name': cv_name,
+        'fold': "overall",
+        'balanced_accuracy': np.round(balanced_accuracy_score(y, y_pred), decimals=2),
+        'f1_score': np.round(f1_score(y, y_pred, average= 'micro'), decimals=2),
+        'mcc': np.round(matthews_corrcoef(y, y_pred), decimals=2)
+    }
 
-        print("k-fold cross-validation running...")
+    kfold_perf.append(overall_cv)
 
-        for train_index, test_index in k_fold.split(self.X, self.y):
+    if (verbose):
+        print(f"OVERALL\nbalanced acc = {overall_cv['balanced_accuracy']}, f1-score = {overall_cv['f1_score']}, MCC = {overall_cv['mcc']}")
 
-            # Defining training set and test set for the i-th fold
-            X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
-            y_train, y_test = self.y[train_index], self.y[test_index]
+    conf_mat = confusion_matrix(y, y_pred)
 
-            # Model training
-            model.fit(X_train.values, y_train.values)
-            y_pred[test_index] = model.predict(X_test.values)
+    # perf = PerformanceMetrics(y, y_pred).classification_scores()
 
-            if(verbose):
-                # Evaluationg performance of the i-th fold
-                print("k = {i_fold}, balance acc = {1}, f1-score = {2}, MCC = {3}"
-                    .format(i_fold, 
-                            np.round(balanced_accuracy_score(y_test, y_pred[test_index]), decimals=2),
-                            np.round(f1_score(y_test, y_pred[test_index], average= 'micro'), decimals=2),
-                            np.round(matthews_corrcoef(y_test, y_pred[test_index]), decimals=2)))
-            i_fold = i_fold + 1
-        
-        # Overall performances
-        balanced_accuracy = np.round(balanced_accuracy_score(self.y, y_pred), decimals=2)
-        f1score = np.round(f1_score(self.y, y_pred, average= 'micro'), decimals=2)
-        mcc = np.round(matthews_corrcoef(self.y, y_pred), decimals=2)
-        print("OVERALL, balanced acc = {0}, f1-score = {1}, MCC = {2}"
-                .format(balanced_accuracy, f1score, mcc))
-        conf_mat = confusion_matrix(self.y, y_pred)
-        print("{0}-fold cross-validation classification report:".format(k))
+    df_perf = pd.DataFrame(kfold_perf)
 
-        cv_perf = PerformanceMetrics(self.y, y_pred).classification_scores()
+    return conf_mat, df_perf
 
-        df_temp = pd.DataFrame(pd.DataFrame(pd.Series([cv_name, balanced_accuracy, f1score, mcc])))
-        df_cv_perf = df_temp.T
-        df_cv_perf.columns = ['cv_type', 'balanced_accuracy', 'f1_score', 'mcc']
+def leave_one_out(model, X: pd.DataFrame, y: list, cv_name: str ='LOOCV', verbose: bool = False):
+    
+    loo = LeaveOneOut()
+    
+    y_pred = np.array(X.shape[0] * [y[0]])
 
-        return conf_mat, df_cv_perf
+    cnt = 1
 
-    def leave_one_out(self, model, cv_name: str ='test', verbose: bool = False):
-        
-        loo = LeaveOneOut()
-        
-        y_pred = pd.Series('NC', index = range(0, self.X.shape[0]))
+    loo_perf = []
 
-        cnt = 1
-        print("Leave One Out cross-validation...")
-        for train_index, test_index in loo.split(self.X):
+    for train_index, test_index in loo.split(X):
 
-            # Defining training set and test set for the i-th fold
-            X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
-            y_train, y_test = self.y[train_index], self.y[test_index]
+        # Defining training set and test set for the i-th leave one out
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y[train_index], y[test_index]
 
-            # Model training
-            model.fit(X_train, y_train)
-            y_pred[test_index] = model.predict(X_test)
-            if(verbose):
-                # Evaluationg performance of the i-th fold
-                print("i = {0}, f1-score = {1}".format(cnt, np.round(f1_score(y_test, y_pred, average= 'micro'), decimals = 2)))
-            cnt = cnt + 1
-        
-        # Overall performances
-        conf_mat = confusion_matrix(self.y, y_pred)
-        balanced_accuracy = np.round(balanced_accuracy_score(self.y, y_pred), decimals=2)
-        f1score = np.round(f1_score(self.y, y_pred, average= 'micro'), decimals=2)
-        mcc = np.round(matthews_corrcoef(self.y, y_pred), decimals=2)
-        print("OVERALL, balanced acc = {0}, f1-score = {1}, MCC = {2}"
-                .format(balanced_accuracy, f1score, mcc))
-        conf_mat = confusion_matrix(self.y, y_pred)
+        # Model training
+        model.fit(X_train.values, y_train)
+        y_pred[test_index] = model.predict(X_test.values)
 
-        print("Leave One Out cross-validation classification report:")
-        
-        cv_perf = PerformanceMetrics(self.y, y_pred).classification_scores()
+        cnt = cnt + 1
+    
+    # Overall performances
+    overall_cv = {
+        'name': cv_name,
+        'fold': "overall",
+        'balanced_accuracy': np.round(balanced_accuracy_score(y, y_pred), decimals=2),
+        'f1_score': np.round(f1_score(y, y_pred, average= 'micro'), decimals=2),
+        'mcc': np.round(matthews_corrcoef(y, y_pred), decimals=2)
+    }
 
-        df_temp = pd.DataFrame(pd.DataFrame(pd.Series([cv_name, balanced_accuracy, f1score, mcc])))
-        df_cv_perf = df_temp.T
-        df_cv_perf.columns = ['cv_type', 'balanced_accuracy', 'f1_score', 'mcc']
+    if (verbose):
+        print(f"OVERALL\nbalanced acc = {overall_cv['balanced_accuracy']}, f1-score = {overall_cv['f1_score']}, MCC = {overall_cv['mcc']}")
 
-        return conf_mat, df_cv_perf
+    loo_perf.append(overall_cv)
 
-    def leave_one_subject_out(self, model, subject_ids: list, cv_name: str ='test', verbose: bool = False):
+    conf_mat = confusion_matrix(y, y_pred)
+    
+    # cv_perf = PerformanceMetrics(y, y_pred).classification_scores()
 
-        y_pred = pd.Series('NC', index = range(0, self.X.shape[0]))
+    df_perf = pd.DataFrame(loo_perf)
 
-        subject_id = np.unique(subject_ids)
+    return conf_mat, df_perf
 
-        print("Leave One Subject Out cross-validation...")
+def leave_one_subject_out(model, X: pd.DataFrame, y: list, subject_ids: list, cv_name: str ='LOSOCV', verbose: bool = False):
 
-        for s in subject_id:
+    y_pred = np.array(X.shape[0] * [y[0]])
 
-            test_index = subject_ids == s
-            train_index = not(test_index)
+    subject_id = np.unique(subject_ids)
 
-            # Defining training set and test set for the i-th fold
-            X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
-            y_train, y_test = self.y[train_index], self.y[test_index]
+    loso_perf = []
 
-            # Model training
-            model.fit(X_train, y_train)
-            y_pred[test_index] = model.predict(X_test)
-            if(verbose):
-                # Evaluationg performance of the i-th fold
-                print("i = {0}, f1-score = {1}".format(cnt, np.round(f1_score(y_test, y_pred, average= 'micro'), decimals = 2)))
-            cnt = cnt + 1
+    for s in subject_id:
 
-        # Overall performances
-        conf_mat = confusion_matrix(self.y, y_pred)
-        balanced_accuracy = np.round(balanced_accuracy_score(self.y, y_pred), decimals=2)
-        f1score = np.round(f1_score(self.y, y_pred, average= 'micro'), decimals=2)
-        mcc = np.round(matthews_corrcoef(self.y, y_pred), decimals=2)
-        print("OVERALL, balanced acc = {0}, f1-score = {1}, MCC = {2}"
-                .format(balanced_accuracy, f1score, mcc))
-        conf_mat = confusion_matrix(self.y, y_pred)
+        test_index = subject_ids == s
+        train_index = not(test_index)
 
-        print("Leave One Subject Out cross-validation classification report:")
-        
-        cv_perf = PerformanceMetrics(self.y, y_pred).classification_scores()
+        # Defining training set and test set for the i-th fold
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y[train_index], y[test_index]
 
-        df_temp = pd.DataFrame(pd.DataFrame(pd.Series([cv_name, balanced_accuracy, f1score, mcc])))
-        df_cv_perf = df_temp.T
-        df_cv_perf.columns = ['cv_type', 'balanced_accuracy', 'f1_score', 'mcc']
+        # Model training
+        model.fit(X_train.values, y_train)
+        y_pred[test_index] = model.predict(X_test.values)
 
-        return conf_mat, df_cv_perf 
+        ith_cv = {
+            'name': cv_name,
+            'subject': s,
+            'balanced_accuracy': np.round(balanced_accuracy_score(y_test, y_pred[test_index]), decimals=2),
+            'f1_score': np.round(f1_score(y_test, y_pred[test_index], average= 'micro'), decimals=2),
+            'mcc': np.round(matthews_corrcoef(y_test, y_pred[test_index]), decimals=2)
+        }
+
+        loso_perf.append(ith_cv)
+ 
+        if (verbose):
+            print(f"subject = {s}\nbalance acc = {ith_cv['balanced_accuracy']}, f1-score = {ith_cv['f1_score']}, MCC = {ith_cv['mcc']}")
+
+    # Overall performances
+    overall_cv = {
+        'name': cv_name,
+        'subject': "overall",
+        'balanced_accuracy': np.round(balanced_accuracy_score(y, y_pred), decimals=2),
+        'f1_score': np.round(f1_score(y, y_pred, average= 'micro'), decimals=2),
+        'mcc': np.round(matthews_corrcoef(y, y_pred), decimals=2)
+    }
+
+    if (verbose):
+        print(f"OVERALL\nbalanced acc = {overall_cv['balanced_accuracy']}, f1-score = {overall_cv['f1_score']}, MCC = {overall_cv['mcc']}")
+
+    loso_perf.append(overall_cv)
+
+    conf_mat = confusion_matrix(y, y_pred)
+    
+    # cv_perf = PerformanceMetrics(y, y_pred).classification_scores()
+
+    df_perf = pd.DataFrame(loso_perf)
+
+    return conf_mat, df_perf
