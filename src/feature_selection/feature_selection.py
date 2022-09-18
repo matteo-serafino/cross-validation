@@ -3,21 +3,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
-
-from sklearn.preprocessing import StandardScaler
-
-# Metrics
-from sklearn.metrics import matthews_corrcoef
+from sklearn.feature_selection import (
+    RFE,
+    SelectKBest,
+    VarianceThreshold,
+    f_classif,
+    mutual_info_classif
+)
 from sklearn.metrics import davies_bouldin_score
-
-## Feature Selection Classes
-from sklearn.feature_selection import RFE
-from sklearn.feature_selection import SelectKBest
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.feature_selection import f_classif
-from sklearn.feature_selection import mutual_info_classif
+from sklearn.preprocessing import StandardScaler
 from ReliefF import ReliefF
-
 from src.cross_validation.cross_validation import kfold
 from src.performance.performance import PerformanceMetrics
 
@@ -26,99 +21,132 @@ class FeatureSelection():
     def __init__(self):
         return
 
-    def variance_threshold(self, clf, X, y, thr: float = 0):
-        
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
-        
-        # Variance Threshold Feature Selection
+    def variance_threshold(self, clf, X: pd.DataFrame, y: list, thr: float = 0, baseline: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().variance_threshold(clf, X, y, thr=0.5, baseline=True)
+        """
+
+        performance = []
+
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
+
+        # 2. Apply feature selection method
         X_sel = pd.DataFrame(VarianceThreshold(threshold=thr).fit_transform(X))
 
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X_sel).transform(X_sel), y)
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X_sel, y, k=5, name='variance_threshold')
+        performance.append(fs_perf)
 
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X_sel, y, k=10, cv_name='var_thr')
+        df_feature_selected = self.selected_features_table(X.columns, X_sel.columns)
 
-        return kfold_confusion_matrix, df_perf, db_score_after, db_score_before
+        return fs_confusion_matrix, performance, df_feature_selected
 
-    def anova(self, clf, X, y, n_feat: int):
+    def anova(self, clf, X: pd.DataFrame, y: list, n_feat: int, baseline: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().anova(clf, X, y, n_feat=30, baseline=True)
+        """
         
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
+        performance = []
 
-        # ANOVA Feature Selection
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
+
+        # 2. Apply feature selection method
         fs = SelectKBest(score_func=f_classif, k=n_feat)
         X_sel = pd.DataFrame(fs.fit_transform(X, y))
 
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X_sel).transform(X_sel), y)
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X_sel, y, k=5, name='anova')
+        performance.append(fs_perf)
 
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X_sel, y, k=10, cv_name='anova')
+        df_feature_selected = self.selected_features_table(X.columns, X_sel.columns)
 
-        return kfold_confusion_matrix, df_perf, db_score_before, db_score_after
+        return fs_confusion_matrix, performance, df_feature_selected
 
-    def mutual_info(self, clf, X, y, n_feat: int):
+    def mutual_info(self, clf, X: pd.DataFrame, y: list, n_feat: int, baseline: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().mutual_info(clf, X, y, n_feat=30, baseline=True)
+        """
         
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
+        performance = []
 
-        # MUTUAL INFORMATION Feature Selection
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
+
+        # 2. Apply feature selection method
         fs = SelectKBest(score_func=mutual_info_classif, k=n_feat)
         X_sel = pd.DataFrame(fs.fit_transform(X, y))
 
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X_sel).transform(X_sel), y)
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X_sel, y, k=5, name='mutual_information')
+        performance.append(fs_perf)
 
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X_sel, y, k=10, cv_name='mutual_info')
+        df_feature_selected = self.selected_features_table(X.columns, X_sel.columns)
 
-        return kfold_confusion_matrix, df_perf, db_score_before, db_score_after
+        return fs_confusion_matrix, performance, df_feature_selected
 
-    def recursive_feature_elimination(self, clf, X, y):
+    def recursive_feature_elimination(self, clf, X: pd.DataFrame, y: list, n_feat: int, baseline: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().recursive_feature_elimination(clf, X, y, n_feat=30, baseline=True)
+        """
         
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
-        
-        # RFE Feature Selection
-        rfe_selector = RFE(estimator=clf, step=1)
+        performance = []
+
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
+
+        # 2. Apply feature selection method
+        rfe_selector = RFE(estimator=clf, n_features_to_select=n_feat, step=1)
         rfe_selector.fit(X, y)
         feat_to_select = X.columns[rfe_selector.get_support()]
 
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X[feat_to_select]).transform(X[feat_to_select]), y)
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X[feat_to_select], y, k=5, name='rfe')
+        performance.append(fs_perf)
 
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X[feat_to_select], y, k=10, cv_name='rfe')
+        df_feature_selected = self.selected_features_table(X.columns, feat_to_select)
 
-        return feat_to_select, kfold_confusion_matrix, df_perf, db_score_before, db_score_after 
+        return fs_confusion_matrix, performance, df_feature_selected
 
-    def random_forest_feature_importance(self, clf, X, y, threshold: float = 0.95, verbose: bool = False):
-        
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
-        
-        # Random Forest Feature Importance Feature Selection
+    def random_forest_importance(self, clf, X: pd.DataFrame, y: list, threshold: float = 0.95, baseline: bool = False, verbose: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().random_forest_importance(clf, X, y, threshold=0.8, baseline=True, verbose=True)
+        """
 
-        model = RandomForestClassifier()
-        model.fit(X.values, y.values)
+        performance = []
+
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
+
+        # 2. Apply feature selection method
+        rf = RandomForestClassifier()
+        rf.fit(X.values, y.values)
         df_feature_importance = pd.DataFrame(
             {
-                "feature":list(X.columns),
-                "importance":model.feature_importances_
+                "feature": list(X.columns),
+                "importance": rf.feature_importances_
             }
         ).sort_values("importance", ascending=False)
 
         df_feature_importance["cumsum_importance"] = np.cumsum(df_feature_importance["importance"])
+        feat_to_select = np.array(df_feature_importance[np.cumsum(df_feature_importance["importance"]) <= threshold]["feature"])
+        
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X[feat_to_select], y, k=5, name='rf_importance')
+        performance.append(fs_perf)
 
-        selected_features = np.array(df_feature_importance[np.cumsum(df_feature_importance["importance"]) <= threshold]["feature"])
-
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X[selected_features]).transform(X[selected_features]), y)
-
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X[selected_features], y, k=10, cv_name='rf_feature_importance')
+        df_feature_selected = self.selected_features_table(X.columns, feat_to_select)
 
         if (verbose):
             plt.figure()
@@ -126,39 +154,53 @@ class FeatureSelection():
             sns.lineplot(x=df_feature_importance.feature, y=df_feature_importance.cumsum_importance)
             plt.xlabel("Features")
             plt.ylabel("Feature Importance Score")
-            plt.title("Random Forest Feature Importance")
+            plt.title("Random Forest Importance")
             plt.grid(b=True)
             plt.xticks(rotation=45, horizontalalignment="right", fontweight="light", fontsize="x-large")
             plt.show(block=False)
         
-        return selected_features, kfold_confusion_matrix, df_perf, db_score_before, db_score_after
+        return fs_confusion_matrix, performance, df_feature_selected
 
-    def relieff(self, clf, X, y, n_feat: int):
+    def relieff(self, clf, X: pd.DataFrame, y: list, n_feat: int, baseline: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().relieff(clf, X, y, n_feat=30, baseline=True)
+        """
+
+        performance = []
+
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
         
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
-        
-        # ReliefF Feature Selection
+        # 2. Apply feature selection method
         fs = ReliefF(n_neighbors=20, n_features_to_keep=n_feat)
-        X_sel = fs.fit_transform(X, y)
+        X_sel = fs.fit_transform(X.values, y.values)
 
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X_sel).transform(X_sel), y)
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X_sel, y, k=5, name='relieff')
+        performance.append(fs_perf)
 
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X_sel, y, k=10, cv_name='ReliefF')
+        df_feature_selected = self.selected_features_table(X.columns, X_sel.columns)
 
-        return kfold_confusion_matrix, df_perf, db_score_before, db_score_after
+        return fs_confusion_matrix, performance, df_feature_selected
 
     def correlation_removal():
+        #TODO:implement the method.
         pass
 
-    def cluster_quality(self, clf, X, y, n_feat: int, verbose: bool = False):
+    def cluster_quality(self, clf, X: pd.DataFrame, y: list, n_feat: int, baseline: bool = False, verbose: bool = False):
+        """
+        conf_matrix, fs_perf, feat_selected = FeatureSelection().cluster_quality(clf, X, y, n_feat=30, baseline=True, verbose=True)
+        """
+        performance = []
+
+        if baseline:
+            # 1. Define the baseline perfornace using the input clf and all the feature set
+            baseline_confusion_matrix, baseline_perf = kfold(clf, X, y, k=5, cv_name='baseline')
+            performance.append(baseline_perf)
         
-        # Davies-Bouldin Score (before the feature selection method)
-        db_score_before = davies_bouldin_score(StandardScaler().fit(X).transform(X), y)
-        
-        # Cluster Quality Feature Selection
+        # 2. Apply feature selection method
         X_scaled = pd.DataFrame(StandardScaler().fit(X).transform(X), columns = X.columns)
 
         db_importance = np.zeros(len(X.columns))
@@ -174,22 +216,35 @@ class FeatureSelection():
             }
         ).sort_values("importance", ascending=True)
 
-        selected_features = df_feature_importance['feature'][0:n_feat]
+        feat_to_select = df_feature_importance['feature'][0:n_feat]
 
         if (verbose):
             plt.figure()
             sns.barplot(x=df_feature_importance.feature, y=df_feature_importance.importance)
             plt.xlabel("Features")
             plt.ylabel("Feature Importance Score")
-            plt.title("Davies-Boulding feature importance")
+            plt.title("Davies-Bouldin importance")
             plt.grid(b=True)
             plt.xticks(rotation=45, horizontalalignment="right", fontweight="light", fontsize="x-large")
             plt.show(block=False)
 
-        # Davies-Bouldin Score (after the feature selection method)
-        db_score_after = davies_bouldin_score(StandardScaler().fit(X[selected_features]).transform(X[selected_features]), y)
+        # 3. Define the feature selection performance
+        fs_confusion_matrix, fs_perf = kfold(clf, X[feat_to_select], y, k=5, name='cluster_quality')
+        performance.append(fs_perf)
 
-        # 10-fold cross-validation
-        kfold_confusion_matrix, df_perf = kfold(clf, X[selected_features], y, k=10, cv_name='davies_bouldin')
+        df_feature_selected = self.selected_features_table(X.columns, feat_to_select)
 
-        return selected_features, kfold_confusion_matrix, df_perf, db_score_before, db_score_after
+        return fs_confusion_matrix, performance, df_feature_selected
+
+    def selected_features_table(self, feature_list, selected_features):
+
+        is_selected = [(x in list(selected_features)) for x in list(feature_list)]
+
+        df_feature = pd.DataFrame(
+            {
+                "feature": feature_list,
+                "is_selected": is_selected
+            }
+        )
+
+        return df_feature

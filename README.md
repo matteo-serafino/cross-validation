@@ -1,11 +1,10 @@
-# Cross Validation Package
+# Feature Selection Package
+Python package for plug and play feature selection techniques, cross-validation and performance evalutation of machine learing models.
+If you like the idea or you find usefull this repo in your job, please leave a ⭐ to support this personal project.
 
-1. Cross Validation methods with performance metrics (WIP)
-    * k-fold;
-    * Leave One Out (LOO);
-    * Leave One Subject Out (LOSO).
+The documentation will grow with all the information about all the feature selection techniques.
 
-2. Feature Selection techiniques (WIP)
+1. Feature Selection techiniques (to be tested)
     * Variance Threshold;
     * Anova;
     * Mutual Information;
@@ -15,5 +14,18 @@
     * Cross-correlation removal;
     * Cluster quality.
 
-3. Performance Metrics (TODO)
+To accompany the feature section method this package has also:
+* Cross Validation methods with performance metrics
+    * k-fold;
+    * Leave One Out (LOO);
+    * Leave One Subject Out (LOSO).
+
+* Performance Metrics for binary and multi-class tasks:
+    * Confusion Matrix Plot (Binary and multi class tasks);
+    * Precision (binary tasks);
+    * Sensitivity (binary tasks);
+    * Specificity (binary tasks);
+    * F1 Score (binary tasks);
+    * sklearn classification report (Binary and multi class tasks).
+
     

@@ -58,8 +58,6 @@ def kfold(model, X: pd.DataFrame, y: list, k: int = 10, cv_name: str ='k-fold', 
 
     conf_mat = confusion_matrix(y, y_pred)
 
-    # perf = PerformanceMetrics(y, y_pred).classification_scores()
-
     df_perf = pd.DataFrame(kfold_perf)
 
     return conf_mat, df_perf
@@ -101,8 +99,6 @@ def leave_one_out(model, X: pd.DataFrame, y: list, cv_name: str ='LOOCV', verbos
     loo_perf.append(overall_cv)
 
     conf_mat = confusion_matrix(y, y_pred)
-    
-    # cv_perf = PerformanceMetrics(y, y_pred).classification_scores()
 
     df_perf = pd.DataFrame(loo_perf)
 
@@ -157,8 +153,6 @@ def leave_one_subject_out(model, X: pd.DataFrame, y: list, subject_ids: list, cv
     loso_perf.append(overall_cv)
 
     conf_mat = confusion_matrix(y, y_pred)
-    
-    # cv_perf = PerformanceMetrics(y, y_pred).classification_scores()
 
     df_perf = pd.DataFrame(loso_perf)
 
