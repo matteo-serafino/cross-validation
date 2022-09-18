@@ -1,12 +1,16 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import LeaveOneOut
-from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import f1_score
-from sklearn.metrics import matthews_corrcoef
-from sklearn.metrics import balanced_accuracy_score
-from src.performance.performance import PerformanceMetrics
+from sklearn.model_selection import (
+    LeaveOneOut,
+    StratifiedKFold
+)
+from sklearn.metrics import (
+    confusion_matrix,
+    f1_score,
+    matthews_corrcoef,
+    balanced_accuracy_score
+)
+
 
 def kfold(model, X: pd.DataFrame, y: list, k: int = 10, cv_name: str ='k-fold', verbose: bool = False):
     
